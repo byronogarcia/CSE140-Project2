@@ -84,11 +84,18 @@ struct addy {
   unsigned int offset;
   unsigned int index;
   unsigned int tag;
-  
+
 }
 
 struct addy getBytes(address addr) {
+  unsigned int off, ind, tag;
 
+  off = addr & 0x3;
+  ind = addr & 0x3;
+  tag = addr & 0x26;
+
+  struct addy holder = {off, ind, tag};
+  return holder;
 }
 
 int replacementPolicy(unsigned int index) {
@@ -99,8 +106,8 @@ void lruUpdate(int index, int block) {
 
 }
 
-TransferUnit getByte() {
-
+TransferUnit getWordSize() {
+  
 }
 
 
@@ -117,7 +124,10 @@ void accessMemory(address addr, word* data, WriteEnable we)
   unsigned int index = theAddr.index;
   unsigned int tag = theAddr.tag;
   bool hit = false; 
-  TransferUnit b = getByte();
+  //TransferUnit b = getByte();
+  //unsigned int = 
+
+  
 
   switch (we) {
       //Read
@@ -136,7 +146,7 @@ void accessMemory(address addr, word* data, WriteEnable we)
                   if (tag == cache[index].block[i].tag) {
 
                     //Find correct Block(Use offset)
-                    //chznge to memcpy
+                    //change to memcpy
                     highlight_offset(index, i, offset, HIT);
                     memcpy((void*)data, (void*)cache[index].block[i].data + offset, 4);
                     cache[index].block[i].accessCount += 1;
