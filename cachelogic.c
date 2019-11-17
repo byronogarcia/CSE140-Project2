@@ -80,17 +80,54 @@ struct addy {
 //Helper functions
 struct addy getBytes(address addr) { 
 	//Convert address to our addy struct
+  unsigned int off, ind, tag;
+  
+  off = addr & int(block_size/4);
+  ind = (addr >> off) & 0x3;
+  tag = (addr >> (off + ind)) addr & 0x26;
 
+  struct addy holder = {off, ind, tag};
+  return holder;
 }
 
-int replacementPolicy(unsigned int index) { //return set number
-	//Create replacement policy based on lru, lfu & rand
+int replacementPolicy(unsigned int index) {
+  int replace = -1;
+  
+  for (int i = assoc - 1; i > -1; i--) {
+    if (cache[i].block[index].valid == 0) {
+      replace = i;
+    }
+  }
+
+  if (replace == -1) {
+    switch(policy) {
+
+      //Random
+      case 0: {
+        int ran = assoc - 1;
+        replace = rand() % ran;
+      }
+      break;
+
+      //LRU
+      case 1: {
+        for (int i = 0; i < assoc; i++) {
+          if (cache[i].block[index].LRU.value == 0) {
+            replace = i;
+          }
+        }
+      }
+      break;
+
+    } 
+  }
+
+  return replace;
 
 }
 
 void lruUpdate(int index, int block) {
 	//
-
 }
 
 TransferUnit getByte() {
@@ -98,10 +135,9 @@ TransferUnit getByte() {
 	switch(block_size){
 		case 4: //1 word
 			return TransferUnit.WORD_SIZE;
-
 		case 8:
 			return TransferUnit.DOUBLEWORD_SIZE;
-
+      
 		case 16:
 			return TransferUnit.QUADWORD_SIZE;
 
@@ -112,7 +148,6 @@ TransferUnit getByte() {
 	//default
 	return TransferUnit.WORD_SIZE;
 }
-
 void accessMemory(address addr, word* data, WriteEnable we){
 	/* Declare variables here */
 
