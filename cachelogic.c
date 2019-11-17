@@ -78,6 +78,32 @@ void init_lru(int assoc_index, int block_index)
               if we == WRITE, then data used to
               update Cache/DRAM
 */
+
+struct addy {
+
+  unsigned int offset;
+  unsigned int index;
+  unsigned int tag;
+  
+}
+
+struct addy getBytes(address addr) {
+
+}
+
+int replacementPolicy(unsigned int index) {
+
+}
+
+void lruUpdate(int index, int block) {
+
+}
+
+TransferUnit getByte() {
+
+}
+
+
 void accessMemory(address addr, word* data, WriteEnable we)
 {
   /* Declare variables here */
@@ -87,63 +113,63 @@ void accessMemory(address addr, word* data, WriteEnable we)
     accessDRAM(addr, (byte*)data, WORD_SIZE, we);
     return;
 
-    unsigned int offset = theAddr.offset;
-    unsigned int index = theAddr.index;
-    unsigned int tag = theAddr.tag;
-    bool hit = false; 
-    TransferUnit b = getByte();
+  unsigned int offset = theAddr.offset;
+  unsigned int index = theAddr.index;
+  unsigned int tag = theAddr.tag;
+  bool hit = false; 
+  TransferUnit b = getByte();
 
-    switch (we) {
-        //Read
-        case 0:
-            {
-              
-                //Cache[index] -> block[association] -> cacheBlock
-                for (int i = 0; i < assoc; i++) {
+  switch (we) {
+      //Read
+      case 0:
+          {
+            
+              //Cache[index] -> block[association] -> cacheBlock
+              for (int i = 0; i < assoc; i++) {
 
-                  //Read HIT
-                  //Valid bit to see if data is valid (Not valid of start up)
-                  //Note: Dirty bit is used for write back. 
-                  if(cache[index].block[i].valid == 1) {
-                      
-                      //The tags match
-                    if (tag == cache[index].block[i].tag) {
+                //Read HIT
+                //Valid bit to see if data is valid (Not valid of start up)
+                //Note: Dirty bit is used for write back. 
+                if(cache[index].block[i].valid == 1) {
+                    
+                    //The tags match
+                  if (tag == cache[index].block[i].tag) {
 
-                      //Find correct Block(Use offset)
-                      //chznge to memcpy
-                      highlight_offset(index, i, offset, HIT);
-                      memcpy((void*)data, (void*)cache[index].block[i].data + offset, 4);
-                      cache[index].block[i].accessCount += 1;
-                      lruUpdate(index, i);
-                      hit = true; 
-                    } 
-                  }
-              }
-              //Read MISS
-                //Need to go to main memory to cache
-                //
-                if (!hit) {
-
-          int replace = replacementPolicy(index);
-          highlight_offset(index, replace, offset, MISS);
-                  //MAKE INTO A FUNCTION WILL USE FOR WRITE
-                  //Decide how much memory to get from the physical memory (Block size)
-                  //Search for an invalid bit in the set to physical memory to
-                  cache[index].block[replace].accessCount += 1;
-                  lruUpdate(index, replace);
-                  cache[index].block[replace].valid = 1;
-                  cache[index].block[replace].tag = tag;
-                  //Access main memory 
-                  accessDRAM(addr, (byte*) cache[index].block[replace].data, b, READ);
-                  highlight_block(index, replace);
-                  //Then read cache 
-                  memcpy((void*) data, (void*) cache[index].block[replace].data + offset, 4);
-
+                    //Find correct Block(Use offset)
+                    //chznge to memcpy
+                    highlight_offset(index, i, offset, HIT);
+                    memcpy((void*)data, (void*)cache[index].block[i].data + offset, 4);
+                    cache[index].block[i].accessCount += 1;
+                    lruUpdate(index, i);
+                    hit = true; 
+                  } 
                 }
+            }
+            //Read MISS
+              //Need to go to main memory to cache
+              //
+              if (!hit) {
 
-          }
-          break; 
-    
+        int replace = replacementPolicy(index);
+        highlight_offset(index, replace, offset, MISS);
+                //MAKE INTO A FUNCTION WILL USE FOR WRITE
+                //Decide how much memory to get from the physical memory (Block size)
+                //Search for an invalid bit in the set to physical memory to
+                cache[index].block[replace].accessCount += 1;
+                lruUpdate(index, replace);
+                cache[index].block[replace].valid = 1;
+                cache[index].block[replace].tag = tag;
+                //Access main memory 
+                accessDRAM(addr, (byte*) cache[index].block[replace].data, b, READ);
+                highlight_block(index, replace);
+                //Then read cache 
+                memcpy((void*) data, (void*) cache[index].block[replace].data + offset, 4);
+
+              }
+
+        }
+        break; 
+
   }
 
   /*
