@@ -90,15 +90,48 @@ struct addy {
 struct addy getBytes(address addr) {
   unsigned int off, ind, tag;
 
-  off = addr & 0x3;
-  ind = addr & 0x3;
-  tag = addr & 0x26;
+  off = addr & int(block_size/4);
+  ind = (addr >> off) & 0x3;
+  tag = (addr >> (off + ind)) addr & 0x26;
 
   struct addy holder = {off, ind, tag};
   return holder;
 }
 
 int replacementPolicy(unsigned int index) {
+  int replace = -1;
+
+  // 
+  for (int i = assoc - 1; i > -1; i--) {
+    if (cache[i].block[index].valid == 0) {
+      replace = i;
+    }
+  }
+
+  if (replace == -1) {
+    switch(policy) {
+
+      //Random
+      case 0: {
+        int ran = assoc - 1;
+        replace = rand() % ran;
+      }
+      break;
+
+      //LRU
+      case 1: {
+        for (int i = 0; i < assoc; i++) {
+          if (cache[i].block[index].LRU.value == 0) {
+            replace = i;
+          }
+        }
+      }
+      break;
+
+    } 
+  }
+
+  return replace;
 
 }
 
@@ -107,7 +140,7 @@ void lruUpdate(int index, int block) {
 }
 
 TransferUnit getWordSize() {
-  
+
 }
 
 
@@ -124,7 +157,7 @@ void accessMemory(address addr, word* data, WriteEnable we)
   unsigned int index = theAddr.index;
   unsigned int tag = theAddr.tag;
   bool hit = false; 
-  //TransferUnit b = getByte();
+  TransferUnit b = getByte();
   //unsigned int = 
 
   
