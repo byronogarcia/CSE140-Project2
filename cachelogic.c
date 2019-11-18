@@ -103,6 +103,7 @@ int replacementPolicy(unsigned int index) {
     switch(policy) {
 
       //Random
+      
       case 0: {
         int ran = assoc - 1;
         replace = rand() % ran;
