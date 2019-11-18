@@ -193,7 +193,9 @@ void accessMemory(address addr, word* data, WriteEnable we){
 
 				//Update block to reflect that data is in it
 				cache[replace].block[index].accessCount = 1; //Update LRU
-				cache[replace].block[index].valid = 1;
+
+				cache[replace].block[index].valid = VALID;
+        
 				cache[replace].block[index].tag = tag;
 			}
 			return; //end method
@@ -221,7 +223,9 @@ void accessMemory(address addr, word* data, WriteEnable we){
 
 				//Update block to reflect that data is in it
 				cache[replace].block[index].accessCount = 1; //Update LRU
-				cache[replace].block[index].valid = 1;
+
+				cache[replace].block[index].valid = VALID;
+
 				cache[replace].block[index].tag = tag;
 			}
 
