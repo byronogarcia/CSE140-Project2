@@ -1,5 +1,6 @@
 #include "tips.h"
 #include <math.h>
+#include <stdbool.h>
 
 /* The following two functions are defined in util.c */
 
@@ -75,16 +76,26 @@ struct addy {
 	unsigned int offset;
 	unsigned int index;
 	unsigned int tag;
-}
+};
 
 //Helper functions
 struct addy getBytes(address addr) { 
 	//Convert address to our addy struct
-	unsigned int off, ind, tag;
+	unsigned int off = 0;
+	unsigned int ind = 0;
+	unsigned int tag = 0;
 	
-	off = addr & int(block_size/4);
+	int word = block_size/4;
+	
+
+	//off = addr & int(block_size/4);
+	off = addr & (int)(word);
 	ind = (addr >> off) & 0x3;
-	tag = (addr >> (off + ind)) addr & 0x26;
+
+	int off_ind = off + ind;
+	tag = (addr >> off_ind) & 0x26;
+	// tag = (addr >> (off + ind)) addr & 0x26;
+
 
 	struct addy holder = {off, ind, tag};
 	return holder;
@@ -92,7 +103,9 @@ struct addy getBytes(address addr) {
 
 int replacementPolicy(unsigned int index) {
 	switch(policy){
-		case ReplacementPolicy.LRU:
+		case 1: //LRU
+		{
+		// case ReplacementPolicy.LRU:
 			int replace = 0;
 			unsigned min_count = cache[0].block[index].accessCount;
 
@@ -104,11 +117,19 @@ int replacementPolicy(unsigned int index) {
 			}
 
 			return replace;
+		}
 
-		case ReplacementPolicy.RANDOM:
-			int replace = randomint(assoc) //Generate a random number between 0 and set_count -1
+		case 0://RANDOM
+		{
+		// case ReplacementPolicy.RANDOM:
+			int replace = randomint(assoc); //Generate a random number between 0 and set_count -1
 
 			return replace;
+		}
+
+		case 2: {
+
+		}
 	}
 }
 
@@ -116,19 +137,25 @@ TransferUnit getByte() {
 	//Convert block_size variable to Transfer unit enum
 	switch(block_size){
 		case 4: //1 word
-			return TransferUnit.WORD_SIZE;
+			// return TransferUnit.WORD_SIZE;
+			return WORD_SIZE;
+
 		case 8:
-			return TransferUnit.DOUBLEWORD_SIZE;
+			// return TransferUnit.DOUBLEWORD_SIZE;
+			return DOUBLEWORD_SIZE;
 			
 		case 16:
-			return TransferUnit.QUADWORD_SIZE;
+			// return TransferUnit.QUADWORD_SIZE;
+			return QUADWORD_SIZE;
 
 		case 32:
-			return TransferUnit.OCTOWORD_SIZE;
+			// return TransferUnit.OCTWORD_SIZE;
+			return OCTWORD_SIZE;
 	}
 
 	//default
-	return TransferUnit.WORD_SIZE;
+	// return TransferUnit.WORD_SIZE;
+	return WORD_SIZE;
 }
 
 void accessMemory(address addr, word* data, WriteEnable we){
@@ -162,14 +189,15 @@ void accessMemory(address addr, word* data, WriteEnable we){
 	*/
 
 	/* Start adding code here */
-	theAddr = getBytes(addr); //Convert address into struct to simplify code
+	struct addy theAddr = getBytes(addr); //Convert address into struct to simplify code
 	unsigned int offset = theAddr.offset;
 	unsigned int index = theAddr.index;
 	unsigned int tag = theAddr.tag;
 	bool hit = false; 
 
 	switch (we) {
-		case WriteEnable.READ:
+		// case WriteEnable.READ:
+		case READ:
 			//Check if addr is in cache
 			for (int i = 0; i < assoc; i++) {
 				if(cache[i].block[index].valid == VALID) { //Only Check valid blocks
@@ -186,7 +214,7 @@ void accessMemory(address addr, word* data, WriteEnable we){
 			}
 
 			if (!hit) { //If miss
-				accessDRAM(addr, data, WriteEnable.READ); //Read data from DRAM
+				accessDRAM(addr, data, READ); //Read data from DRAM
 				int replace = replacementPolicy(index); //return set number according to policy
 				highlight_offset(replace, index, offset, MISS); //Highlight new block of data in cache
 				memcpy(cache[replace].block[index].data + offset, data, 4); //Place data in selected cache block
@@ -200,7 +228,8 @@ void accessMemory(address addr, word* data, WriteEnable we){
 			}
 			return; //end method
 
-		case WriteEnable.WRITE:
+		// case WriteEnable.WRITE:
+		case WRITE:
 			//Check if addr is in cache and write to it first
 			for (int i = 0; i < assoc; i++) {
 				if(cache[i].block[index].valid == VALID) { //Only Check valid blocks
@@ -229,7 +258,7 @@ void accessMemory(address addr, word* data, WriteEnable we){
 				cache[replace].block[index].tag = tag;
 			}
 
-			accessDRAM(addr, src, WriteEnable.WRITE); //Write data to memory normally now
+			accessDRAM(addr, src, WRITE); //Write data to memory normally now
 			return; //end method
 	}
 }
