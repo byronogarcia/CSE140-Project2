@@ -72,63 +72,44 @@ void init_lru(int assoc_index, int block_index)
 
 //Helper structs
 struct addy {
-  unsigned int offset;
-  unsigned int index;
-  unsigned int tag;
+	unsigned int offset;
+	unsigned int index;
+	unsigned int tag;
 }
 
 //Helper functions
 struct addy getBytes(address addr) { 
 	//Convert address to our addy struct
-  unsigned int off, ind, tag;
-  
-  off = addr & int(block_size/4);
-  ind = (addr >> off) & 0x3;
-  tag = (addr >> (off + ind)) addr & 0x26;
+	unsigned int off, ind, tag;
+	
+	off = addr & int(block_size/4);
+	ind = (addr >> off) & 0x3;
+	tag = (addr >> (off + ind)) addr & 0x26;
 
-  struct addy holder = {off, ind, tag};
-  return holder;
+	struct addy holder = {off, ind, tag};
+	return holder;
 }
 
 int replacementPolicy(unsigned int index) {
-  int replace = -1;
-  
-  for (int i = assoc - 1; i > -1; i--) {
-    if (cache[i].block[index].valid == 0) {
-      replace = i;
-    }
-  }
+	switch(policy){
+		case ReplacementPolicy.LRU:
+			int replace = 0;
+			unsigned min_count = cache[0].block[index].accessCount;
 
-  if (replace == -1) {
-    switch(policy) {
+			for(int i = 1; i < assoc; i++){
+				if(min_count > cache[i].block[index].accessCount){
+					min_count = cache[i].block[index].accessCount;
+					replace = i;
+				}
+			}
 
-      //Random
-      
-      case 0: {
-        int ran = assoc - 1;
-        replace = rand() % ran;
-      }
-      break;
+			return replace;
 
-      //LRU
-      case 1: {
-        for (int i = 0; i < assoc; i++) {
-          if (cache[i].block[index].LRU.value == 0) {
-            replace = i;
-          }
-        }
-      }
-      break;
+		case ReplacementPolicy.RANDOM:
+			int replace = randomint(assoc) //Generate a random number between 0 and set_count -1
 
-    } 
-  }
-
-  return replace;
-
-}
-
-void lruUpdate(int index, int block) {
-	//
+			return replace;
+	}
 }
 
 TransferUnit getByte() {
@@ -138,7 +119,7 @@ TransferUnit getByte() {
 			return TransferUnit.WORD_SIZE;
 		case 8:
 			return TransferUnit.DOUBLEWORD_SIZE;
-      
+			
 		case 16:
 			return TransferUnit.QUADWORD_SIZE;
 
@@ -149,6 +130,7 @@ TransferUnit getByte() {
 	//default
 	return TransferUnit.WORD_SIZE;
 }
+
 void accessMemory(address addr, word* data, WriteEnable we){
 	/* Declare variables here */
 
@@ -180,63 +162,70 @@ void accessMemory(address addr, word* data, WriteEnable we){
 	*/
 
 	/* Start adding code here */
-	unsigned int offset = theAddr.offset; //Address struct to simplify code
+	theAddr = getBytes(addr); //Convert address into struct to simplify code
+	unsigned int offset = theAddr.offset;
 	unsigned int index = theAddr.index;
 	unsigned int tag = theAddr.tag;
 	bool hit = false; 
-	TransferUnit b = getByte(); //helper function used to...
 
 	switch (we) {
-		//Read
 		case WriteEnable.READ:
-			//Cache[index] -> block[association] -> cacheBlock
-
+			//Check if addr is in cache
 			for (int i = 0; i < assoc; i++) {
-				//Read HIT
-				//Valid bit to see if data is valid (Not valid of start up)
-				//Note: Dirty bit is used for write back. 
-				if(cache[i].block[index].valid == VALID) {
-					//The tags match
-					if (tag == cache[i].block[index].tag) {
-						//Find correct Block(Use offset)
-						//change to memcpy
+				if(cache[i].block[index].valid == VALID) { //Only Check valid blocks
+					if (tag == cache[i].block[index].tag) { //Check to if tags match
+						//hit
+						hit = true;
 						highlight_offset(i, index, offset, HIT);
-						memcpy((void*)data, (void*)cache[i].block[index].data + offset, 4);
+						memcpy(data, cache[i].block[index].data + offset, 4); //Read data from block, 4 bytes = word
+						//update LRU
 						cache[i].block[index].accessCount += 1;
-						lruUpdate(i, index);
-						hit = true; 
+						break;
 					} 
 				}
 			}
-			//Read MISS
-			//Need to go to main memory to cache
-			if (!hit) {
-				int replace = replacementPolicy(index); //return set number
-				highlight_offset(replace, index, offset, MISS);
-				//MAKE INTO A FUNCTION WILL USE FOR WRITE
-				//Decide how much memory to get from the physical memory (Block size)
-				//Search for an invalid bit in the set to physical memory to
-				cache[replace].block[index].accessCount += 1;
-				lruUpdate(replace, index);
+
+			if (!hit) { //If miss
+				accessDRAM(addr, data, WriteEnable.READ); //Read data from DRAM
+				int replace = replacementPolicy(index); //return set number according to policy
+				highlight_offset(replace, index, offset, MISS); //Highlight new block of data in cache
+				memcpy(cache[replace].block[index].data + offset, data, 4); //Place data in selected cache block
+
+				//Update block to reflect that data is in it
+				cache[replace].block[index].accessCount = 1; //Update LRU
 				cache[replace].block[index].valid = 1;
 				cache[replace].block[index].tag = tag;
-				//Access main memory 
-				accessDRAM(addr, (byte*) cache[replace].block[index].data, b, READ);
-				highlight_block(replace, index);
-				//Then read cache 
-				memcpy((void*) data, (void*) cache[replace].block[index].data + offset, 4);
 			}
-			break;
+			return; //end method
 
 		case WriteEnable.WRITE:
-			//Write code
+			//Check if addr is in cache and write to it first
+			for (int i = 0; i < assoc; i++) {
+				if(cache[i].block[index].valid == VALID) { //Only Check valid blocks
+					if (tag == cache[i].block[index].tag) { //Check to if tags match
+						//hit
+						hit = true;
+						highlight_offset(i, index, offset, HIT);
+						memcpy(cache[i].block[index].data + offset, data, 4); //Write data into block/offset word
+						//update LRU
+						cache[i].block[index].accessCount = 1;
+						break;
+					} 
+				}
+			}
 
-			break;
+			if(!hit){ //If we missed
+				int replace = replacementPolicy(index); //return set number according to policy
+				highlight_offset(replace, index, offset, MISS); //Highlight new block of data in cache
+				memcpy(cache[replace].block[index].data + offset, data, 4); //Place data in selected cache block
+
+				//Update block to reflect that data is in it
+				cache[replace].block[index].accessCount = 1; //Update LRU
+				cache[replace].block[index].valid = 1;
+				cache[replace].block[index].tag = tag;
+			}
+
+			accessDRAM(addr, src, WriteEnable.WRITE); //Write data to memory normally now
+			return; //end method
 	}
-	/* This call to accessDRAM occurs when you modify any of the
-		 cache parameters. It is provided as a stop gap solution.
-		 At some point, ONCE YOU HAVE MORE OF YOUR CACHELOGIC IN PLACE,
-		 THIS LINE SHOULD BE REMOVED.
-	*/
-	accessDRAM(addr, (byte*)data, WORD_SIZE, we);
 }
