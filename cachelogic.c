@@ -261,7 +261,7 @@ void accessMemory(address addr, word* data, WriteEnable we){
 			}
 
 			TransferUnit mode = WORD_SIZE; //Transfer word to our DRAM
-			accessDRAM(addr, src, mode, WRITE); //Write data to memory normally now
+			accessDRAM(addr, data, mode, WRITE); //Write data to memory normally now
 			return; //end method
 	}
 }
