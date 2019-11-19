@@ -133,9 +133,9 @@ int replacementPolicy(unsigned int index) {
 	}
 }
 
-//We haven't actually used this yet, I'll have to see how we use it..
-TransferUnit getByte() {
-	//Convert block_size variable to Transfer unit enum
+
+TransferUnit getBlock() { 
+	//This helper function turns our block_size global variable to TransferUnit enum
 	switch(block_size){
 		case 4: //1 word
 			// return TransferUnit.WORD_SIZE;
@@ -231,7 +231,7 @@ void accessMemory(address addr, word* data, WriteEnable we){
 			return; //end method
 
 		// case WriteEnable.WRITE:
-		case WRITE:
+		case WRITE: //Write Through policy
 			//Check if addr is in cache and write to it first
 			for (int i = 0; i < assoc; i++) {
 				if(cache[i].block[index].valid == VALID) { //Only Check valid blocks
@@ -242,6 +242,9 @@ void accessMemory(address addr, word* data, WriteEnable we){
 						memcpy(cache[i].block[index].data + offset, data, 4); //Write data into block/offset word
 						//update LRU
 						cache[i].block[index].accessCount = 1;
+
+						//data should now hold block data for Write Through policy
+						memcpy(data, cache[i].block[index].data, block_size);
 						break;
 					} 
 				}
@@ -258,9 +261,13 @@ void accessMemory(address addr, word* data, WriteEnable we){
 				cache[replace].block[index].valid = VALID;
 
 				cache[replace].block[index].tag = tag;
+
+
+				//data should now hold block data for Write Through policy
+				memcpy(data, cache[replace].block[index].data, block_size);
 			}
 
-			TransferUnit mode = WORD_SIZE; //Transfer word to our DRAM
+			TransferUnit mode = getBlock(); //Transfer entire block to DRAM
 			accessDRAM(addr, data, mode, WRITE); //Write data to memory normally now
 			return; //end method
 	}
