@@ -85,14 +85,55 @@ struct addy getBytes(address addr) {
     unsigned int ind = 0;
     unsigned int tag = 0;
     
-    //offset will contain 3 bits.... last 3 bits
-    off = addr & (0x7);
+    // //offset will contain 3 bits.... last 3 bits
+    // off = addr & (0x7);
     
-    //offset will contain the next 4 bits
-    ind = (addr >> 3) & 0xF;
+    // //offset will contain the next 4 bits
+    // ind = (addr >> 3) & 0xF;
     
-    //Tag will be the upper 25 bits
-    tag = (addr >> 7) & 0x1FFFFFF;
+    // //Tag will be the upper 25 bits
+    // tag = (addr >> 7) & 0x1FFFFFF;
+    
+    if (block_size == 4) {
+        off = 0x3 & addr;
+        addr = addr >> 2;
+    }
+    else if (block_size == 8) {
+        off = 0x7 & addr;
+        addr = addr >> 3;
+    }
+    else if (block_size == 16) {
+        off = 0xF & addr;
+        addr = addr >> 4;
+    }
+    else if (block_size == 32) {
+        off = 0x1F & addr;
+        addr = addr >> 5;
+    }
+    
+    // INDEX
+    if (set_count == 1) {
+        ind = 0;
+    }
+    else if (set_count == 2) {
+        ind = 0x1 & addr;
+        addr = addr >> 1;
+    }
+    else if (set_count == 4) {
+        ind = 0x3 & addr;
+        addr = addr >> 2;
+    }
+    else if (set_count == 8) {
+        ind = 0x7 & addr;
+        addr = addr >> 3;
+    }
+    else if (set_count == 16) {
+        ind = 0xF & addr;
+        addr = addr >> 4;
+    }
+    
+    // TAG
+    tag = addr;
     
     struct addy holder = {off, ind, tag};
     return holder;
@@ -196,80 +237,156 @@ void accessMemory(address addr, word* data, WriteEnable we){
     switch (we) {
             // case WriteEnable.READ:
         case READ:
-            //Check if addr is in cache
-            for (int i = 0; i < assoc; i++) {
-                if(cache[i].block[index].valid == VALID) { //Only Check valid blocks
-                    if (tag == cache[i].block[index].tag) { //Check to if tags match
-                        //hit
-                        hit = true;
-                        highlight_offset(i, index, offset, HIT);
-                        memcpy(data, cache[i].block[index].data + offset, 4); //Read data from block, 4 bytes = word
-                        //update LRU
-                        cache[i].block[index].accessCount += 1;
-                        cache[i].block[index].lru.value += 1;
-                        break;
+            if(memory_sync_policy == WRITE_THROUGH){
+                //Check if addr is in cache
+                for (int i = 0; i < assoc; i++) {
+                    if(cache[index].block[i].valid == VALID) { //Only Check valid blocks
+                        if (tag == cache[index].block[i].tag) { //Check to if tags match
+                            //hit
+                            hit = true;
+                            highlight_offset(index, i, offset, HIT);
+                            memcpy(data, cache[index].block[i].data + offset, 4); //Read data from block, 4 bytes = word
+                            //update LRU
+                            cache[index].block[i].accessCount += 1;
+                            cache[index].block[i].lru.value += 1;
+                            break;
+                        }
                     }
                 }
+                
+                if (!hit) { //If miss
+                    TransferUnit mode = getBlock(); //We want to transfer a block's worth of data to the cache from DRAM
+                    accessDRAM(addr, data, mode, READ); //Read data from DRAM into data variable
+                    int replace = replacementPolicy(index); //return assoc according to policy
+                    highlight_offset(index, replace, offset, MISS); //Highlight new block of data in cache
+                    memcpy(cache[index].block[replace].data, data, block_size); //Copy info in data variable to our block + offset
+                    
+                    //Update block to reflect that data is in it
+                    cache[index].block[replace].accessCount = 1; //Update LRU
+                    cache[index].block[replace].lru.value = 1;
+                    
+                    cache[index].block[replace].valid = VALID;
+                    cache[index].block[replace].tag = tag;
+                    
+                }
+                return; //end method
+            } else if(memory_sync_policy == WRITE_BACK){
+                //Check if addr is in cache
+                for (int i = 0; i < assoc; i++) {
+                    if(cache[index].block[i].valid == VALID) { //Only Check valid blocks
+                        if (tag == cache[index].block[i].tag) { //Check to if tags match
+                            //hit
+                            hit = true;
+                            highlight_offset(index, i, offset, HIT);
+                            memcpy(data, cache[index].block[i].data + offset, 4); //Read data from block, 4 bytes = word
+                            //update LRU
+                            cache[index].block[i].accessCount += 1;
+                            cache[index].block[i].lru.value += 1;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!hit) { //If miss
+                    int replace = replacementPolicy(index); //return set number according to policy
+                    if(cache[index].block[replace].dirty == DIRTY){ //If the data we are to replace is dirty, upload it to DRAM
+                        //Get block data
+                        byte* block_data;
+                        memcpy(block_data, cache[index].block[replace].data, block_size);
+                        
+                        TransferUnit mode = getBlock(); //Transfer entire block to DRAM
+                        accessDRAM(addr, block_data, mode, WRITE); //Write data to memory normally now
+                    }
+                    TransferUnit mode = getBlock(); //We want to transfer a block's worth of data to the cache from DRAM
+                    accessDRAM(addr, data, mode, READ); //Read data from DRAM into data variable
+                    
+                    highlight_offset(index, replace, offset, MISS); //Highlight new block of data in cache
+                    memcpy(cache[index].block[replace].data, data, block_size); //Copy info in data variable to our block
+                    
+                    //Update block to reflect that data is in it
+                    cache[index].block[replace].accessCount = 1; //Update LRU
+                    cache[index].block[replace].lru.value = 1;
+                    
+                    cache[index].block[replace].valid = VALID;
+                    cache[index].block[replace].tag = tag;
+                    cache[index].block[replace].dirty = VIRGIN; //The data is no longer different than the DRAM's
+                    
+                }
+                return; //end method
             }
-            
-            if (!hit) { //If miss
-                TransferUnit mode = getBlock(); //We want to transfer a block's worth of data to the cache from DRAM
-                accessDRAM(addr, data, mode, READ); //Read data from DRAM into data variable
-                int replace = replacementPolicy(index); //return set number according to policy
-                highlight_offset(replace, index, offset, MISS); //Highlight new block of data in cache
-                memcpy(cache[replace].block[index].data, data, block_size); //Copy info in data variable to our block + offset
-                
-                //Update block to reflect that data is in it
-                cache[replace].block[index].accessCount = 1; //Update LRU
-                cache[replace].block[index].lru.value = 1;
-                
-                cache[replace].block[index].valid = VALID;
-                cache[replace].block[index].tag = tag;
-                
-            }
-            return; //end method
             
             // case WriteEnable.WRITE:
-        case WRITE: //Write Through policy
-            //Check if addr is in cache and write to it first
-            for (int i = 0; i < assoc; i++) {
-                if(cache[i].block[index].valid == VALID) { //Only Check valid blocks
-                    if (tag == cache[i].block[index].tag) { //Check to if tags match
-                        //hit
-                        hit = true;
-                        highlight_offset(i, index, offset, HIT);
-                        memcpy(cache[i].block[index].data + offset, data, 4); //Write data into block/offset word
-                        //update LRU
-                        cache[i].block[index].accessCount = 1;
-                        cache[i].block[index].lru.value = 1;
-                        
-                        //data should now hold block data for Write Through policy
-                        memcpy(data, cache[i].block[index].data, block_size);
-                        break;
+        case WRITE:
+            if(memory_sync_policy == WRITE_THROUGH){
+                //Write Through policy
+                //Check if addr is in cache and write to it first
+                for (int i = 0; i < assoc; i++) {
+                    if(cache[index].block[i].valid == VALID) { //Only Check valid blocks
+                        if (tag == cache[index].block[i].tag) { //Check to if tags match
+                            //hit
+                            hit = true;
+                            highlight_offset(index, i, offset, HIT);
+                            memcpy(cache[index].block[i].data + offset, data, 4); //Write data into block/offset word
+                            //update LRU
+                            cache[index].block[i].accessCount = 1;
+                            cache[index].block[i].lru.value = 1;
+                            
+                            //data should now hold block data for Write Through policy
+                            memcpy(data, cache[index].block[i].data, block_size);
+                            break;
+                        }
                     }
                 }
+                
+                //If we missed we write the data straight to DRAM, no cache operations needed
+                TransferUnit mode = getBlock(); //Transfer entire block to DRAM
+                accessDRAM(addr, data, mode, WRITE); //Write data to memory normally now
+                return; //end method
+                
+            } else if(memory_sync_policy == WRITE_BACK){
+                //Write Back policy
+                //Check if addr is in cache and write to it
+                for (int i = 0; i < assoc; i++) {
+                    if(cache[index].block[i].valid == VALID) { //Only Check valid blocks
+                        if (tag == cache[index].block[i].tag) { //Check if tags match
+                            //hit
+                            hit = true;
+                            highlight_offset(index, i, offset, HIT);
+                            memcpy(cache[index].block[i].data + offset, data, 4); //Write data into block/offset word
+                            //update LRU
+                            cache[index].block[i].accessCount = 1;
+                            cache[index].block[i].lru.value = 1;
+                            //Our data is now dirty!
+                            cache[index].block[i].dirty = DIRTY;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!hit){ //If we missed
+                    int replace = replacementPolicy(index); //return set number according to policy
+                    highlight_offset(index, replace, offset, MISS); //Highlight new block of data in cache
+                    if(cache[index].block[replace].dirty == DIRTY){ //If the data we are to replace is dirty, upload it to DRAM
+                        //Get block data
+                        byte* block_data;
+                        memcpy(block_data, cache[index].block[replace].data, block_size);
+                        
+                        TransferUnit mode = getBlock(); //Transfer entire block to DRAM
+                        accessDRAM(addr, block_data, mode, WRITE); //Write data to memory normally now
+                    }
+                    
+                    
+                    memcpy(cache[index].block[replace].data + offset, data, 4); //Place data in selected cache block
+                    
+                    //Update block to reflect that data is in it
+                    cache[index].block[replace].accessCount = 1; //Update LRU
+                    cache[index].block[replace].lru.value = 1;
+                    cache[index].block[replace].valid = VALID;
+                    cache[index].block[replace].tag = tag;
+                    cache[index].block[replace].dirty = DIRTY;
+                }
+                
+                return; //end method
             }
-            
-            if(!hit){ //If we missed
-                int replace = replacementPolicy(index); //return set number according to policy
-                highlight_offset(replace, index, offset, MISS); //Highlight new block of data in cache
-                memcpy(cache[replace].block[index].data + offset, data, 4); //Place data in selected cache block
-                
-                //Update block to reflect that data is in it
-                cache[replace].block[index].accessCount = 1; //Update LRU
-                cache[replace].block[index].lru.value = 1;
-                
-                cache[replace].block[index].valid = VALID;
-                
-                cache[replace].block[index].tag = tag;
-                
-                
-                //data should now hold block data for Write Through policy
-                memcpy(data, cache[replace].block[index].data, block_size);
-            }
-            
-            TransferUnit mode = getBlock(); //Transfer entire block to DRAM
-            accessDRAM(addr, data, mode, WRITE); //Write data to memory normally now
-            return; //end method
     }
 }
