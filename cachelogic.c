@@ -133,6 +133,7 @@ int replacementPolicy(unsigned int index) {
 	}
 }
 
+//We haven't actually used this yet, I'll have to see how we use it..
 TransferUnit getByte() {
 	//Convert block_size variable to Transfer unit enum
 	switch(block_size){
@@ -214,10 +215,11 @@ void accessMemory(address addr, word* data, WriteEnable we){
 			}
 
 			if (!hit) { //If miss
-				accessDRAM(addr, data, READ); //Read data from DRAM
+				TransferUnit mode = WORD_SIZE; //We want to transfer a word's worth of data to the cache from DRAM
+				accessDRAM(addr, data, mode, READ); //Read data from DRAM into data variable
 				int replace = replacementPolicy(index); //return set number according to policy
 				highlight_offset(replace, index, offset, MISS); //Highlight new block of data in cache
-				memcpy(cache[replace].block[index].data + offset, data, 4); //Place data in selected cache block
+				memcpy(cache[replace].block[index].data + offset, data, 4); //Copy info in data variable to our block + offset
 
 				//Update block to reflect that data is in it
 				cache[replace].block[index].accessCount = 1; //Update LRU
@@ -258,7 +260,8 @@ void accessMemory(address addr, word* data, WriteEnable we){
 				cache[replace].block[index].tag = tag;
 			}
 
-			accessDRAM(addr, src, WRITE); //Write data to memory normally now
+			TransferUnit mode = WORD_SIZE; //Transfer word to our DRAM
+			accessDRAM(addr, src, mode, WRITE); //Write data to memory normally now
 			return; //end method
 	}
 }
